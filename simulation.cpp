@@ -293,19 +293,101 @@ double grid::blur_temperature(int i, int j, int k, int filter_width)
             for(int z=-offset; z<=offset; z++)
             {
                 int flag = 1; // in case we do boundary checking later . . .
-                // blur += get_cell(i+x, j+y, k+z, flag).temperature;
                 blur += get_cell(i+x, j+y, k+z, flag).get_scalar_field(cell::TEMPERATURE);
             }    
         }
     }
     blur /= 27.0;
-    // if(blur <0.5 && blur > 0.0001) std::cout << blur << std::endl;
     return blur;
+}
+
+void grid::vorticity_confinement()
+{
+    // vorticity confinement
+    // TODO: vorticity confinement causes error when fluid reaches corners ???
+    for(int i=0; i<dimx; i++)
+    {
+        for(int j=0; j<dimy; j++)
+        {
+            for(int k=0; k<dimz; k++)
+            {
+                // calculate curl
+                int f = 0;
+                vec4 pos = position_from_index(vec4(i,j,k));
+                // vec4 vx0 = get_velocity(vec4(pos.x-half_cell_width,pos.y,pos.z));
+                vec4 vx0 = get_interpolated_vector(vec4(pos.x-half_cell_width,pos.y,pos.z), cell::VELOCITY);
+                // vec4 vx1 = get_velocity(vec4(pos.x+half_cell_width,pos.y,pos.z));
+                vec4 vx1 = get_interpolated_vector(vec4(pos.x+half_cell_width,pos.y,pos.z), cell::VELOCITY);
+                // vec4 vy0 = get_velocity(vec4(pos.x,pos.y-half_cell_width,pos.z));
+                vec4 vy0 = get_interpolated_vector(vec4(pos.x,pos.y-half_cell_width,pos.z), cell::VELOCITY);
+                // vec4 vy1 = get_velocity(vec4(pos.x,pos.y+half_cell_width,pos.z));
+                vec4 vy1 = get_interpolated_vector(vec4(pos.x,pos.y+half_cell_width,pos.z), cell::VELOCITY);
+                // vec4 vz0 = get_velocity(vec4(pos.x,pos.y,pos.z-half_cell_width));
+                vec4 vz0 = get_interpolated_vector(vec4(pos.x,pos.y,pos.z-half_cell_width), cell::VELOCITY);
+                // vec4 vz1 = get_velocity(vec4(pos.x,pos.y,pos.z+half_cell_width));
+                vec4 vz1 = get_interpolated_vector(vec4(pos.x,pos.y,pos.z+half_cell_width), cell::VELOCITY);
+                
+                double dx = (vy1.z - vy0.z) - (vz1.y - vz0.y);
+                double dy = (vz1.x - vz0.x) - (vx1.z - vx0.z);
+                double dz = (vx1.y - vx0.y) - (vy1.x - vy0.x);
+
+                cells[i][j][k].curl = vec4(dx,dy,dz);
+                cells[i][j][k].mag_curl = cells[i][j][k].curl.length();
+            }
+        }
+    }
+
+    for(int i=0; i<dimx; i++)
+    {
+        for(int j=0; j<dimy; j++)
+        {
+            for(int k=0; k<dimz; k++)
+            {
+                // vorticity confinement
+                int f = 0;
+                vec4 grad_curl = vec4(get_cell(i+1,j,k,f).mag_curl - get_cell(i-1,j,k,f).mag_curl,
+                                      get_cell(i,j+1,k,f).mag_curl - get_cell(i,j-1,k,f).mag_curl,
+                                      get_cell(i,j,k+1,f).mag_curl - get_cell(i,j,k-1,f).mag_curl);
+                if(grad_curl.length()==0) grad_curl = vec4(0,0,0);
+                else grad_curl.normalize();
+                // grad_curl.normalize();
+                vec4 vort = grad_curl.cross(cells[i][j][k].curl);
+                vort *= 4.5;
+                // if(isnan(vort.x) || isnan(vort.y) || isnan(vort.z))
+                // {
+                //     std::cout << "grad_curl: " << grad_curl.x << " " << grad_curl.y << " " << grad_curl.z << std::endl;
+                // }
+                // if(vort.x!=0) std::cout << "vort: " << vort.x << " " << vort.y << " " << vort.z << std::endl;
+                if(cells[i][j][k].get_scalar_field(cell::DENSITY) > epsilon || cells[i][j][k].envelope)
+                    cells[i][j][k].vector_fields[cell::VELOCITY] += vort*timestep;
+            }
+        }
+    }
+}
+
+void grid::buoyancy_forces()
+{
+    for(int i=0; i<dimx; i++)
+    {
+        for(int j=0; j<dimy; j++)
+        {
+            for(int k=0; k<dimz; k++)
+            {
+                if(cells[i][j][k].get_scalar_field(cell::DENSITY) > epsilon ||  cells[i][j][k].get_scalar_field(cell::TEMPERATURE) > epsilon)
+                {
+                    vec4 corner = position_from_index(vec4(i,j,k)) - vec4(0,half_cell_width,0);
+                    double temp = get_interpolated_scalar(corner, cell::TEMPERATURE);
+                    double k_rise = temp*buoyancy;
+                    double k_fall = 0.0;//cells[i][j][k].density*-buoyancy/4;
+                    cells[i][j][k].vector_fields[cell::VELOCITY] += vec4(0.0, 1.0, 0.0)*((k_rise+k_fall)*timestep);
+                }
+            }
+        }
+    }
 }
 
 void grid::external_forces()
 {
-    // BE CAREFUL TO SET next_cells equal to
     for(int i=0; i<dimx; i++)
     {
         for(int j=0; j<dimy; j++)
@@ -314,29 +396,16 @@ void grid::external_forces()
             {
                 double cur_density = cells[i][j][k].get_scalar_field(cell::DENSITY);
                 double cur_temperature = cells[i][j][k].get_scalar_field(cell::TEMPERATURE);
-                // if( cells[i][j][k].density > epsilon ||  cells[i][j][k].temperature > epsilon)
                 if(cur_density > epsilon ||  cur_temperature > epsilon)
                 {
 
                     // dissipation
-                    // cells[i][j][k].density = std::max(0.0, cells[i][j][k].density - dissipation*timestep);
                     cells[i][j][k].set_scalar_field(cell::DENSITY, std::max(0.0, cur_density - dissipation*timestep));
-                    // // next_cells[i][j][k].temperature = std::max(0.0, cells[i][j][k].temperature - dissipation*5.0*timestep);
                     // cells[i][j][k].set_scalar_field(cell::TEMPERATURE, std::max(0.0, cur_temperature - dissipation*5.0*timestep));
 
+                    // blur temperature
                     // // next_cells[i][j][k].temperature = blur_temperature(i, j, k, 3);
                     // next_cells[i][j][k].set_scalar_field(cell::TEMPERATURE, blur_temperature(i, j, k, 3));
-                    // // if(cells[i][j][k].temperature <0.5 && cells[i][j][k].temperature > 0.0001) std::cout << cells[i][j][k].temperature << std::endl;
-                    // // if(isnan(cells[i][j][k].temperature)) std::cout << "nan temperature" << std::endl;
-
-                    // vec4 corner = position_from_index(vec4(i,j,k)) - vec4(0,half_cell_width,0);
-                    // // double temp = get_temperature(corner);
-                    // double temp = get_interpolated_scalar(corner, cell::TEMPERATURE);
-                    // // double temp = cells[i][j][k].temperature;/
-                    // double k_rise = temp*buoyancy;
-                    // double k_fall = 0.0;//cells[i][j][k].density*-buoyancy/4;
-                    // cells[i][j][k].vector_fields[cell::VELOCITY] = cells[i][j][k].vector_fields[cell::VELOCITY] + vec4(0.0, 1.0, 0.0)*((k_rise+k_fall)*timestep);
-
 
                     // pumps
                     for(int s=0; s<sources.size(); s++)
@@ -352,6 +421,7 @@ void grid::external_forces()
                     }
 
                 }
+
                 // wind force
                 // if( cells[i][j][k].density < epsilon)
                 // {
@@ -361,86 +431,15 @@ void grid::external_forces()
                 //     vec4 wind_force(1,0,0);
                 //     next_cells[i][j][k].velocity = cells[i][j][k].velocity*(1 - k_wind) + wind_force*(k_wind*timestep);
                 // }
+
                 //gravity
                 if(cur_density > epsilon || cells[i][j][k].envelope==0)
                     cells[i][j][k].vector_fields[cell::VELOCITY] +=(vec4(0,-1,0)*(gravity*timestep));
                     // cells[i][j][k].velocity +=(vec4(0,-.707,.707)*(gravity*timestep));
-
-                // if(isnan(cells[i][j][k].velocity.x) || isnan(cells[i][j][k].velocity.y) || isnan(cells[i][j][k].velocity.z))
-                // {
-                //     std::cout << "external_forces nan: " << cells[i][j][k].velocity.x << ", " << cells[i][j][k].velocity.y << ", " << cells[i][j][k].velocity.z << std::endl;
-                // }
-                // if(cells[i][j][k].density < epsilon && !cells[i][j][k].envelope && cells[i][j][k].temperature < epsilon)
-                //     next_cells[i][j][k].velocity = vec4(0,0,0);
             }
         }
     }
-
     // advance_timestep(); //TODO: figure out best way to to this without messing stuff up
-    // vorticity confinement
-    // TODO: vorticity confinement causes error when fluid reaches corners ???
-    // for(int i=0; i<dimx; i++)
-    // {
-    //     for(int j=0; j<dimy; j++)
-    //     {
-    //         for(int k=0; k<dimz; k++)
-    //         {
-    //             // calculate curl
-    //             int f = 0;
-    //             vec4 pos = position_from_index(vec4(i,j,k));
-    //             // vec4 vx0 = get_velocity(vec4(pos.x-half_cell_width,pos.y,pos.z));
-    //             vec4 vx0 = get_interpolated_vector(vec4(pos.x-half_cell_width,pos.y,pos.z), cell::VELOCITY);
-    //             // vec4 vx1 = get_velocity(vec4(pos.x+half_cell_width,pos.y,pos.z));
-    //             vec4 vx1 = get_interpolated_vector(vec4(pos.x+half_cell_width,pos.y,pos.z), cell::VELOCITY);
-    //             // vec4 vy0 = get_velocity(vec4(pos.x,pos.y-half_cell_width,pos.z));
-    //             vec4 vy0 = get_interpolated_vector(vec4(pos.x,pos.y-half_cell_width,pos.z), cell::VELOCITY);
-    //             // vec4 vy1 = get_velocity(vec4(pos.x,pos.y+half_cell_width,pos.z));
-    //             vec4 vy1 = get_interpolated_vector(vec4(pos.x,pos.y+half_cell_width,pos.z), cell::VELOCITY);
-    //             // vec4 vz0 = get_velocity(vec4(pos.x,pos.y,pos.z-half_cell_width));
-    //             vec4 vz0 = get_interpolated_vector(vec4(pos.x,pos.y,pos.z-half_cell_width), cell::VELOCITY);
-    //             // vec4 vz1 = get_velocity(vec4(pos.x,pos.y,pos.z+half_cell_width));
-    //             vec4 vz1 = get_interpolated_vector(vec4(pos.x,pos.y,pos.z+half_cell_width), cell::VELOCITY);
-                
-    //             double dx = (vy1.z - vy0.z) - (vz1.y - vz0.y);
-    //             double dy = (vz1.x - vz0.x) - (vx1.z - vx0.z);
-    //             double dz = (vx1.y - vx0.y) - (vy1.x - vy0.x);
-
-    //             // double dx = get_cell(i+1,j,k,f).velocity.x - get_cell(i,j,k,f).velocity.x;
-    //             // double dy = get_cell(i,j+1,k,f).velocity.y - get_cell(i,j,k,f).velocity.y;
-    //             // double dz = get_cell(i,j,k+1,f).velocity.z - get_cell(i,j,k,f).velocity.z;
-    //             // cells[i][j][k].curl = vec4(dz-dy, dx-dz, dy-dx);
-    //             cells[i][j][k].curl = vec4(dx,dy,dz);
-    //             cells[i][j][k].mag_curl = cells[i][j][k].curl.length();
-    //         }
-    //     }
-    // }
-
-    // for(int i=0; i<dimx; i++)
-    // {
-    //     for(int j=0; j<dimy; j++)
-    //     {
-    //         for(int k=0; k<dimz; k++)
-    //         {
-    //             // vorticity confinement
-    //             int f = 0;
-    //             vec4 grad_curl = vec4(get_cell(i+1,j,k,f).mag_curl - get_cell(i-1,j,k,f).mag_curl,
-    //                                   get_cell(i,j+1,k,f).mag_curl - get_cell(i,j-1,k,f).mag_curl,
-    //                                   get_cell(i,j,k+1,f).mag_curl - get_cell(i,j,k-1,f).mag_curl);
-    //             if(grad_curl.length()==0) grad_curl = vec4(0,0,0);
-    //             else grad_curl.normalize();
-    //             // grad_curl.normalize();
-    //             vec4 vort = grad_curl.cross(cells[i][j][k].curl);
-    //             vort *= 4.5;
-    //             if(isnan(vort.x) || isnan(vort.y) || isnan(vort.z))
-    //             {
-    //                 std::cout << "grad_curl: " << grad_curl.x << " " << grad_curl.y << " " << grad_curl.z << std::endl;
-    //             }
-    //             // if(vort.x!=0) std::cout << "vort: " << vort.x << " " << vort.y << " " << vort.z << std::endl;
-    //             if(cells[i][j][k].density > epsilon || cells[i][j][k].envelope)
-    //                 cells[i][j][k].vector_fields[cell::VELOCITY] += vort*timestep;
-    //         }
-    //     }
-    // }
 }
 
 void grid::extrapolate_velocity(int num_cells)

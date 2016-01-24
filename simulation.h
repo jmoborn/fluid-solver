@@ -82,6 +82,8 @@ class grid
     void add_sources(bool particle_source=false);
     double blur_temperature(int i, int j, int k, int filter_width);
     void external_forces();
+    void vorticity_confinement();
+    void buoyancy_forces();
     void extrapolate_velocity(int);
     void update_grid();
     void solve_pressure();
