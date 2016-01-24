@@ -3,13 +3,13 @@
 const int cell::DENSITY = 0;
 const int cell::PRESSURE = 1;
 const int cell::TEMPERATURE = 2;
-const int cell::MAG_CURL = 3; // TODO
+const int cell::MAG_CURL = 3;
 
 const int cell::VELOCITY = 0;
 const int cell::OLD_VELOCITY = 1;
 const int cell::DELTA_VELOCITY = 2;
 const int cell::WEIGHTS = 3;
-const int cell::CURL = 4; // TODO
+const int cell::CURL = 4;
 
 cell::cell()
 {
@@ -91,11 +91,10 @@ grid::grid(int x, int y, int z, vec4 size)
     }
 
     this->dissipation = 0.0;
-    // this->buoyancy = 3.0;
+    this->buoyancy = 0.0;
     this->ambient_temperature = 0.1;
     this->epsilon = 0.0001;
     this->flip = 0.97;
-    // this->flip = 0.0;
 
     empty = new cell();
 
@@ -265,10 +264,8 @@ void grid::add_sources(bool particle_source)
                         {
                             double cur_density = cells[i][j][k].get_scalar_field(cell::DENSITY);
                             cells[i][j][k].set_scalar_field(cell::DENSITY, cur_density + sources[s].scale*timestep);
-                            // cells[i][j][k].density += sources[s].scale*timestep;
                             double cur_temperature = cells[i][j][k].get_scalar_field(cell::TEMPERATURE);
                             cells[i][j][k].set_scalar_field(cell::TEMPERATURE, cur_temperature + sources[s].scale*timestep);
-                            // cells[i][j][k].temperature += sources[s].scale*timestep;
                         }
                     }
                 }
@@ -314,25 +311,20 @@ void grid::vorticity_confinement()
                 // calculate curl
                 int f = 0;
                 vec4 pos = position_from_index(vec4(i,j,k));
-                // vec4 vx0 = get_velocity(vec4(pos.x-half_cell_width,pos.y,pos.z));
                 vec4 vx0 = get_interpolated_vector(vec4(pos.x-half_cell_width,pos.y,pos.z), cell::VELOCITY);
-                // vec4 vx1 = get_velocity(vec4(pos.x+half_cell_width,pos.y,pos.z));
                 vec4 vx1 = get_interpolated_vector(vec4(pos.x+half_cell_width,pos.y,pos.z), cell::VELOCITY);
-                // vec4 vy0 = get_velocity(vec4(pos.x,pos.y-half_cell_width,pos.z));
                 vec4 vy0 = get_interpolated_vector(vec4(pos.x,pos.y-half_cell_width,pos.z), cell::VELOCITY);
-                // vec4 vy1 = get_velocity(vec4(pos.x,pos.y+half_cell_width,pos.z));
                 vec4 vy1 = get_interpolated_vector(vec4(pos.x,pos.y+half_cell_width,pos.z), cell::VELOCITY);
-                // vec4 vz0 = get_velocity(vec4(pos.x,pos.y,pos.z-half_cell_width));
                 vec4 vz0 = get_interpolated_vector(vec4(pos.x,pos.y,pos.z-half_cell_width), cell::VELOCITY);
-                // vec4 vz1 = get_velocity(vec4(pos.x,pos.y,pos.z+half_cell_width));
                 vec4 vz1 = get_interpolated_vector(vec4(pos.x,pos.y,pos.z+half_cell_width), cell::VELOCITY);
                 
                 double dx = (vy1.z - vy0.z) - (vz1.y - vz0.y);
                 double dy = (vz1.x - vz0.x) - (vx1.z - vx0.z);
                 double dz = (vx1.y - vx0.y) - (vy1.x - vy0.x);
 
-                cells[i][j][k].curl = vec4(dx,dy,dz);
-                cells[i][j][k].mag_curl = cells[i][j][k].curl.length();
+                vec4 curl = vec4(dx,dy,dz);
+                cells[i][j][k].set_vector_field(cell::CURL, curl);
+                cells[i][j][k].set_scalar_field(cell::MAG_CURL, curl.length());
             }
         }
     }
@@ -345,13 +337,13 @@ void grid::vorticity_confinement()
             {
                 // vorticity confinement
                 int f = 0;
-                vec4 grad_curl = vec4(get_cell(i+1,j,k,f).mag_curl - get_cell(i-1,j,k,f).mag_curl,
-                                      get_cell(i,j+1,k,f).mag_curl - get_cell(i,j-1,k,f).mag_curl,
-                                      get_cell(i,j,k+1,f).mag_curl - get_cell(i,j,k-1,f).mag_curl);
+                vec4 grad_curl = vec4(get_cell(i+1,j,k,f).get_scalar_field(cell::MAG_CURL) - get_cell(i-1,j,k,f).get_scalar_field(cell::MAG_CURL),
+                                      get_cell(i,j+1,k,f).get_scalar_field(cell::MAG_CURL) - get_cell(i,j-1,k,f).get_scalar_field(cell::MAG_CURL),
+                                      get_cell(i,j,k+1,f).get_scalar_field(cell::MAG_CURL) - get_cell(i,j,k-1,f).get_scalar_field(cell::MAG_CURL));
                 if(grad_curl.length()==0) grad_curl = vec4(0,0,0);
                 else grad_curl.normalize();
-                // grad_curl.normalize();
-                vec4 vort = grad_curl.cross(cells[i][j][k].curl);
+                vec4 curl = cells[i][j][k].get_vector_field(cell::CURL);
+                vec4 vort = grad_curl.cross(curl);
                 vort *= 4.5;
                 // if(isnan(vort.x) || isnan(vort.y) || isnan(vort.z))
                 // {
@@ -670,7 +662,10 @@ std::cout << "applying pressure" << std::endl;
                 vec4 gradient = vec4(pressure - get_cell(i-1,j,k,f).get_scalar_field(cell::PRESSURE),
                                      pressure - get_cell(i,j-1,k,f).get_scalar_field(cell::PRESSURE),
                                      pressure - get_cell(i,j,k-1,f).get_scalar_field(cell::PRESSURE));
-                // TODO: don't apply pressure on solid borders
+
+                if(get_cell(i-1,j,k,f).solid) gradient.x = 0.0;
+                if(get_cell(i,j-1,k,f).solid) gradient.y = 0.0;
+                if(get_cell(i,j,k-1,f).solid) gradient.z = 0.0;
 
                 cells[i][j][k].vector_fields[cell::VELOCITY] -= gradient*(timestep/(cell_width));
             }

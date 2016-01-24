@@ -23,14 +23,8 @@ class cell
     public:
     cell();
     ~cell(){};
-    vec4 velocity;
-    vec4 old_velocity;
-    vec4 velocity_diff;
-    vec4 curl;
-    vec4 weights;
     vec4 vector_fields[5];
 
-    double mag_curl;
     double scalar_fields[4];
 
     int solid;
