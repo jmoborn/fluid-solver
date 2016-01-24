@@ -140,18 +140,18 @@ vec4 & vec4::operator*=(const double c)
 	z *= c;
 	return *this;
 }
-vec4 & vec4::operator*=(const mat4& m)
-{	
-	double mx = m(0,0)*x + m(0,1)*y + m(0,2)*z + m(0,3)*w;
-	double my = m(1,0)*x + m(1,1)*y + m(1,2)*z + m(1,3)*w;
-	double mz = m(2,0)*x + m(2,1)*y + m(2,2)*z + m(2,3)*w;
-	double mw = m(3,0)*x + m(3,1)*y + m(3,2)*z + m(3,3)*w;
-	x = mx/mw;
-	y = my/mw;
-	z = mz/mw;
-	w = 1.0;
-	return *this;
-}
+// vec4 & vec4::operator*=(const mat4& m)
+// {	
+// 	double mx = m(0,0)*x + m(0,1)*y + m(0,2)*z + m(0,3)*w;
+// 	double my = m(1,0)*x + m(1,1)*y + m(1,2)*z + m(1,3)*w;
+// 	double mz = m(2,0)*x + m(2,1)*y + m(2,2)*z + m(2,3)*w;
+// 	double mw = m(3,0)*x + m(3,1)*y + m(3,2)*z + m(3,3)*w;
+// 	x = mx/mw;
+// 	y = my/mw;
+// 	z = mz/mw;
+// 	w = 1.0;
+// 	return *this;
+// }
 
 vec4 operator-(const vec4& v1, const vec4& v2)
 {
@@ -169,14 +169,14 @@ vec4 operator+(const vec4& v, double c)
 {
 	return vec4(v.x+c, v.y+c, v.z+c);
 }
-vec4 operator*(const mat4& m, const vec4& v)
-{
-	double mvx = m(0,0)*v.x + m(0,1)*v.y + m(0,2)*v.z + m(0,3)*v.w;
-	double mvy = m(1,0)*v.x + m(1,1)*v.y + m(1,2)*v.z + m(1,3)*v.w;
-	double mvz = m(2,0)*v.x + m(2,1)*v.y + m(2,2)*v.z + m(2,3)*v.w;
-	double mvw = m(3,0)*v.x + m(3,1)*v.y + m(3,2)*v.z + m(3,3)*v.w;
-	return vec4(mvx, mvy, mvz, mvw);
-}
+// vec4 operator*(const mat4& m, const vec4& v)
+// {
+// 	double mvx = m(0,0)*v.x + m(0,1)*v.y + m(0,2)*v.z + m(0,3)*v.w;
+// 	double mvy = m(1,0)*v.x + m(1,1)*v.y + m(1,2)*v.z + m(1,3)*v.w;
+// 	double mvz = m(2,0)*v.x + m(2,1)*v.y + m(2,2)*v.z + m(2,3)*v.w;
+// 	double mvw = m(3,0)*v.x + m(3,1)*v.y + m(3,2)*v.z + m(3,3)*v.w;
+// 	return vec4(mvx, mvy, mvz, mvw);
+// }
 vec4 operator*(const vec4& v, const double c)
 {
 	return vec4(v.x*c, v.y*c, v.z*c);

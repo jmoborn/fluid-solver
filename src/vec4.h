@@ -5,7 +5,7 @@
 #include <iostream>
 #include <limits>
 
-#include "mat4.h"
+// #include "mat4.h"
 
 /*
 
@@ -47,13 +47,13 @@ public:
 	vec4 & operator+=(const double c);
 	vec4 & operator-=(const double c);
 	vec4 & operator*=(const double c);
-	vec4 & operator*=(const mat4& m);
+	// vec4 & operator*=(const mat4& m);
 
 	friend vec4 operator-(const vec4& v1, const vec4& v2);
 	friend vec4 operator+(const vec4& v1, const vec4& v2);
 	friend vec4 operator-(const vec4& v, const double c);
 	friend vec4 operator+(const vec4& v, const double c);
-	friend vec4 operator*(const mat4& m, const vec4& v);
+	// friend vec4 operator*(const mat4& m, const vec4& v);
 	friend vec4 operator*(const vec4& v, const double c);
 	friend vec4 operator*(const vec4& v1, const vec4& v2);
 
