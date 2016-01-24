@@ -26,15 +26,31 @@ class cell
     vec4 velocity;
     vec4 old_velocity;
     vec4 velocity_diff;
-    double density;
-    double pressure;
-    double temperature;
+    vec4 curl;
+    vec4 weights;
+    vec4 vector_fields[5];
+
+    double mag_curl;
+    double scalar_fields[4];
+
     int solid;
     int envelope;
-    vec4 curl;
-    double mag_curl;
-    // std::vector<particle*> geometry;
-    vec4 weights;
+    
+    static const int DENSITY;
+    static const int PRESSURE;
+    static const int TEMPERATURE;
+    static const int MAG_CURL;
+
+    static const int VELOCITY;
+    static const int OLD_VELOCITY;
+    static const int DELTA_VELOCITY;
+    static const int WEIGHTS;
+    static const int CURL;
+
+    double get_scalar_field(int field);
+    void set_scalar_field(int field, double value);
+    vec4 get_vector_field(int field);
+    void set_vector_field(int field, vec4 value);
 };
 
 class source
@@ -71,15 +87,11 @@ class grid
     void solve_pressure();
     void enforce_boundaries();
     void enforce_boundaries_particles();
-    vec4 multiply_weights_velocity(vec4 index, double* weights);
-    vec4 multiply_weights_velocity_diff(vec4 index, double* weights);
-    double multiply_weights_density(vec4 cell, double* weights);
-    double multiply_weights_temperature(vec4 cell, double* weights);
+    vec4 multiply_weights_vector(vec4 index, double* weights, int field);
+    double multiply_weights_scalar(vec4 cell, double* weights, int field);
     void get_interpolation_weights(double x, double y, double z, double* weights);
-    vec4 get_velocity(vec4 position);
-    vec4 get_velocity_difference(vec4 position);
-    double get_density(vec4 position);
-    double get_temperature(vec4 position);
+    vec4 get_interpolated_vector(vec4 position, int field);
+    double get_interpolated_scalar(vec4 position, int field);
     void write_particles(std::string filename);
     void write_density(std::string filename);
     int dimx, dimy, dimz; // dimensions

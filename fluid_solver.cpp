@@ -47,7 +47,7 @@ void solve_smoke(grid sim, int frames)
     {
         double t = (i+1)*sim.default_timestep;
         std::ostringstream s;
-        s << "volume_" << i+1 << ".vdb";
+        s << "bin/volume_" << i+1 << ".vdb";
         std::string filename(s.str());
         sim.write_density(filename);
 
@@ -88,7 +88,7 @@ void solve_flip(grid sim, int frames)
     {
         t = (i+1)*sim.default_timestep;
         std::ostringstream s;
-        s << "particles_" << i+1 << ".txt";
+        s << "bin/particles_" << i+1 << ".txt";
         // s << "volume_" << i+1 << ".vdb";
         std::string filename(s.str());
         sim.write_particles(filename);
@@ -168,7 +168,7 @@ int main(int argc, char* argv[])
     std::cout << "cell width: " << sim.cell_width << std::endl;
     std::cout << "half cell width: " << sim.half_cell_width << std::endl;
     // sim.sources.push_back(source(vec4(0.0, 0.0, 0.0), 0.3));
-    sim.sources.push_back(source(vec4(-0.85, -0.4, 0.0), 0.28)); // best for particle fluid
+    sim.sources.push_back(source(vec4(-0.85, -0.2, 0.0), 0.28)); // best for particle fluid
     // sim.sources.push_back(source(vec4(-0.85, -0.75, 0.0), 0.3)); // best for smoke
     // sim.sources.push_back(source(vec4(-0.764, -0.73, 0.16), 0.15));
     // sim.sources.push_back(source(vec4(-0.85, -0.604, -0.118), 0.17));
